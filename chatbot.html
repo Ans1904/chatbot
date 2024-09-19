@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Interface</title>
+    <style>
+        /* Chatbot Styles */
+        #chat-container {
+            width: 350px;
+            height: 500px;
+            border: 1px solid #ccc;
+            display: none;
+            flex-direction: column;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            font-family: Arial, sans-serif;
+        }
+
+        #chatbox {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .message {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            max-width: 80%;
+        }
+
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+        }
+
+        .bot-message {
+            background-color: #f1f1f1;
+            color: black;
+            align-self: flex-start;
+        }
+
+        #message-box-container {
+            display: flex;
+            border-top: 1px solid #ccc;
+        }
+
+        #message-box {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+        }
+
+        #send-button {
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        #send-button:hover {
+            background-color: #0056b3;
+        }
+
+        #chat-icon {
+            width: 60px;
+            height: 60px;
+            background-color: #007bff;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            cursor: pointer;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            font-size: 24px;
+        }
+
+        button {
+            padding: 8px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Chatbot Container -->
+    <div id="chat-container">
+        <div id="chatbox"></div>
+
+        <!-- Message Input -->
+        <div id="message-box-container">
+            <input id="message-box" type="text" placeholder="Type a message...">
+            <button id="send-button">&#x27A4;</button> <!-- Enter arrow button -->
+        </div>
+    </div>
+
+    <!-- Chatbot Icon -->
+    <div id="chat-icon">💬</div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const chatbox = document.getElementById('chatbox');
+        const messageBox = document.getElementById('message-box');
+        const sendButton = document.getElementById('send-button');
+        const chatIcon = document.getElementById('chat-icon');
+
+        let context = {}; // To keep track of conversation state
+
+        // Initialize chat
+        function initializeChat() {
+            fetch('http://localhost:5000/initialize', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(handleChatResponse)
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Append bot or user messages
+        function appendMessage(message, className) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${className}`;
+            messageElement.innerHTML = message;
+            chatbox.appendChild(messageElement);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        // Append buttons for bot options
+        function appendButtons(buttons) {
+            buttons.forEach(button => {
+                const btn = document.createElement('button');
+                btn.textContent = button.text;
+                btn.onclick = () => {
+                    appendMessage(button.text, 'user-message');
+                    sendMessage(button.payload);
+                };
+                chatbox.appendChild(btn);
+            });
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        // Handle chat response
+        function handleChatResponse(response) {
+            appendMessage(response.message, 'bot-message');
+            if (response.buttons) {
+                appendButtons(response.buttons);
+            }
+            if (response.context && response.context.waiting_for_case_number) {
+                messageBox.placeholder = "Enter your case number...";
+                messageBox.focus();
+            } else {
+                messageBox.placeholder = "Type a message...";
+            }
+            context = response.context || {};
+        }
+
+        // Send message to backend
+        function sendMessage(message) {
+            fetch('http://localhost:5000/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, context })
+            })
+            .then(response => response.json())
+            .then(response => {
+                handleChatResponse(response);
+                context = response.context || {}; // Update context
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Event listener for clicking send button
+        sendButton.addEventListener('click', () => {
+            const message = messageBox.value.trim();
+            if (message) {
+                appendMessage(message, 'user-message');
+                sendMessage(message);
+                messageBox.value = ''; // Clear the input box
+            }
+        });
+
+        // Event listener for pressing "Enter" key
+        messageBox.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                const message = messageBox.value.trim();
+                if (message) {
+                    appendMessage(message, 'user-message');
+                    sendMessage(message);
+                    messageBox.value = ''; // Clear the input box
+                }
+            }
+        });
+
+        // Toggle chat container visibility
+        chatIcon.addEventListener('click', () => {
+            const isChatVisible = chatContainer.style.display === 'flex';
+            chatContainer.style.display = isChatVisible ? 'none' : 'flex';
+            if (!isChatVisible) {
+                initializeChat(); // Reinitialize chat when opening
+            }
+        });
+
+        // Automatically initialize chat on page load
+        window.addEventListener('load', () => {
+            initializeChat();
+        });
+    </script>
+</body>
+</html>
